@@ -1,0 +1,59 @@
+version: "3"
+
+volumes:
+  json:
+    external: true
+  bytecodes:
+    external: true
+  abi:
+    external: true
+
+services:
+  rabbitmq:
+    image: 'rabbitmq:3-management'
+    container_name: rabbitmq
+    ports:
+      - "16672:15672"
+    networks:
+      - default
+
+  celery-flower:
+    build: .
+    ports:
+      - "10566:5566"
+    command: celery --broker=amqp://rabbitmq// flower --address=0.0.0.0 --port=5566
+    depends_on:
+      - rabbitmq
+    networks:
+      - default
+
+  celery-update:
+    build: .
+    volumes:
+      - bytecodes:/usr/src/ethereum_blockchain/bytecodes
+      - abi:/usr/src/ethereum_blockchain/abi_contract
+    command: celery -A celery_main worker --loglevel=INFO -n write_db_trx -Q write_db_trx
+    depends_on:
+      - rabbitmq
+    networks:
+      - default
+
+  listener:
+    build: .
+    depends_on:
+      - rabbitmq
+    command: python -u listener.py
+    networks:
+      - default
+
+  router:
+    build: .
+    depends_on:
+      - rabbitmq
+    command: python -u router.py
+    networks:
+      - default
+
+networks:
+  default:
+    driver: bridge
